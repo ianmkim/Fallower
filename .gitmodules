@@ -1,0 +1,3 @@
+[submodule "FallDetection"]
+	path = FallDetection
+	url = https://github.com/parvusvox/FallDetection.git
