@@ -1,3 +1,6 @@
 [submodule "FallDetection"]
 	path = FallDetection
 	url = https://github.com/parvusvox/FallDetection.git
+[submodule "vision_msgs"]
+	path = vision_msgs
+	url = https://github.com/ros-perception/vision_msgs.git
