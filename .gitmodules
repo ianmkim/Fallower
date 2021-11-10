@@ -7,3 +7,6 @@
 [submodule "kill_depth"]
 	path = kill_depth
 	url = https://github.com/parvusvox/kill_depth.git
+[submodule "fall-detection-alert-system"]
+	path = fall-detection-alert-system
+	url = https://github.com/Pape98/fall-detection-alert-system.git
