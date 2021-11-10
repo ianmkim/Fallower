@@ -8,6 +8,11 @@ cd Fallower
 git submodule update --init --recursive
 ```
 
+In order to update all the submodules to origin, use this
+```
+git submodule foreach git pull origin master
+```
+
 ## Ros Dependencies Needed
 ```
 ros-noetic-cv-bridge
