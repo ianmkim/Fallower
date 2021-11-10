@@ -55,7 +55,11 @@ Then, `roscd hector_slam_launch` and change `launch/tutorial.launch` into the fo
   </include>
 
 </launch>
+```
 
+Then to launch hector slam simply run
+```
+roslaunch hector_slam_launch tutorial.launch
 ```
 
 ## ROS Setup 
