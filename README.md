@@ -15,3 +15,10 @@ ros-noetic-vision-opencv
 
 ```
 
+## ROS Setup 
+```
+roscore # run the ros master
+roslaunch kill_depth rosbot_hardware_no_depth.launch # run the modified camera & lidar module without the depth processing
+rosluanch rosbot_ekf all.launch # normal motor control and whatnot
+
+```
