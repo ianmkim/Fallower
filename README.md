@@ -17,7 +17,7 @@ git submodule foreach git pull origin master
 ```
 ros-noetic-cv-bridge
 ros-noetic-vision-opencv
-
+ros-noetic-hector-slam
 ```
 
 ## ROS Setup 
