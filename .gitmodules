@@ -4,3 +4,6 @@
 [submodule "vision_msgs"]
 	path = vision_msgs
 	url = https://github.com/ros-perception/vision_msgs.git
+[submodule "kill_depth"]
+	path = kill_depth
+	url = https://github.com/parvusvox/kill_depth.git

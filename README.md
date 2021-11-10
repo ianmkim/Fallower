@@ -8,3 +8,10 @@ cd Fallower
 git submodule update --init --recursive
 ```
 
+## Ros Dependencies Needed
+```
+ros-noetic-cv-bridge
+ros-noetic-vision-opencv
+
+```
+
