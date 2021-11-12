@@ -68,19 +68,21 @@ class fsm(Enum):
 
 class PersonTracker():
 
-    def __init__(self, controller, linear_velocity=LINEAR_VELOCITY, 
-    scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD], 
-    threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE):
+    def __init__(self, controller, linear_velocity=LINEAR_VELOCITY,
+                 scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
+                 threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE):
         # Setting up publishers/subscribers.
-        self._cmd_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
+        self._cmd_pub = rospy.Publisher(
+            DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+        self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan)
         # TO DO: add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person )
-        self._fall_sub = rospy.Subscriber("location_status", Point, self._fall_callback, queue_size=1)
+        self._fall_sub = rospy.Subscriber("fall_detection", Point)
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
 
-        ts = message_filters.ApproximateTimeSynchronizer([self._laser_sub, self._fall_sub], 10, 0.1, allow_headerless=True)
+        ts = message_filters.ApproximateTimeSynchronizer(
+            [self._laser_sub, self._fall_sub], 10, 0.1, allow_headerless=True)
         ts.registerCallback(self._callback)
 
         # set up the controller
@@ -179,8 +181,10 @@ class PersonTracker():
             # otherwise rotate by angle provided by controller
             elif self._fsm == fsm.TRACKING:
 
-                new_rotation = self.controller.step(self.direction_error_list, 0.1)
-                new_direction = self.controller.step(self.distance_error_list, 0.1)
+                new_rotation = self.controller.step(
+                    self.direction_error_list, 0.1)
+                new_direction = self.controller.step(
+                    self.distance_error_list, 0.1)
 
                 self.move(new_direction, new_rotation)
 
