@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Author: Tim (Kyoung Tae) Kim
 # Date: November 9th, 2021
@@ -23,7 +23,7 @@ from std_msgs.msg import Int32, Float32
 # Constants.
 # Topic names
 DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
-DEFAULT_SCAN_TOPIC = 'base_scan'  # name of topic for Stage simulator
+DEFAULT_SCAN_TOPIC = 'scan'  # name of topic for Stage simulator
 # DEFAULT_SCAN_TOPIC = 'scan' # For Gazebo, 'scan'
 
 # Frequency at which the loop operates
@@ -76,7 +76,7 @@ class PersonTracker():
         self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan, self._laser_callback, queue_size=1)
         # TO DO: add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person )
-        # self._fall_sub = rospy.Subscriber("fall_detection", Point, self._fall_callback, queue_size=1)
+        self._fall_sub = rospy.Subscriber("location_status", Point, self._fall_callback, queue_size=1)
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
 
