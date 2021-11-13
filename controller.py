@@ -15,6 +15,7 @@ from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import LaserScan  # message type for scan
 import tf
 import message_filters
+from std_msgs.msg import String
 
 # Constants.
 # Topic names
@@ -80,10 +81,12 @@ class PersonTracker():
         # add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person)
         self._fall_sub = message_filters.Subscriber("location_status", Point)
+        self._action_sub = message_filters.Subscriber("action_status", String)
+
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
         self.ts = message_filters.ApproximateTimeSynchronizer(
-            [self._laser_sub, self._fall_sub], 1, 1, allow_headerless=True)
+            [self._laser_sub, self._fall_sub, self._action_sub], 1, 1, allow_headerless=True)
         self.ts.registerCallback(self._callback)
 
         # set up the controller
@@ -106,6 +109,7 @@ class PersonTracker():
         # intial state of the robot
         self._fsm = fsm.INITIAL
         self.fall_msg = None
+        self.action_msg = None
     # move the robot
 
     def move(self, linear_vel, angular_vel):
@@ -119,7 +123,7 @@ class PersonTracker():
         twist_msg = Twist()
         self._cmd_pub.publish(twist_msg)
 
-    def _callback(self, laser_msg, fall_msg):
+    def _callback(self, laser_msg, fall_msg, action_msg):
         ############################### Laser #####################################
         min_distance = float('-inf')
 
@@ -155,6 +159,9 @@ class PersonTracker():
             sum(self.z_values)/len(self.z_values)
         self.direction_error_list.append(direction_error)
         self.distance_error_list.append(distance_error)
+
+        ################################ Status #####################################
+        self.action_msg = action_msg
 
         ###########################################################################
 
@@ -195,7 +202,7 @@ class PersonTracker():
                     self.direction_error_list, 0.1)
                 new_velocity = self.controller.step(
                     self.distance_error_list, 0.1)
-                status = self.fall_msg.action_status
+                status = self.action_msg
 
                 if ((not self.fall_msg) or self.fall_msg.x == 0 or
                         status == "Fall Down" or status == "Lying Down"):
@@ -217,7 +224,7 @@ def main():
     rospy.sleep(2)
 
     # Initialize controller
-    controller = PD(1.1,2)
+    controller = PD(1.1, 2)
 
     # Initialization of the class for the robot following the right wall
     tracker = PersonTracker(controller)
