@@ -210,7 +210,8 @@ class PersonTracker():
                 else:
                     print("Linear Velocity: ", max(0, new_velocity/80000))
                     print("Angular Velocity: ", new_rotation/200)
-                    self.move(max(0, new_velocity/80000), new_rotation/200)
+                    self.move(max(0, min(0.5, new_velocity/80000)),
+                              new_rotation/200)
                     self.fall_msg = None
             rate.sleep()
 
