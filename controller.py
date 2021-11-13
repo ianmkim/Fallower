@@ -214,10 +214,10 @@ def main():
     rospy.init_node("person_tracker")
 
     # Sleep for a few seconds to wait for the registration.
-    rospy.sleep(4)
+    rospy.sleep(2)
 
     # Initialize controller
-    controller = PD(1.1, 2)
+    controller = PD(1.1,2)
 
     # Initialization of the class for the robot following the right wall
     tracker = PersonTracker(controller)
