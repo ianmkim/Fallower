@@ -35,7 +35,8 @@ ANGULAR_VELOCITY = math.pi/8
 
 # Goal distance to the wall
 THRESHOLD_DISTANCE = 0.05  # m
-TARGET_DISTANCE = 0.5  # m
+TARGET_DISTANCE = 35000  # z values
+TARGET_DIRECTION = 200 
 
 # Field of view in radians that is checked in front of the robot
 MIN_SCAN_ANGLE_RAD = - 180.0 / 180 * math.pi
@@ -52,10 +53,12 @@ class PD:
 
     # step function that calculates new velocity
     def step(self, error_list, dt):
-        print("error list", error_list)
+        #print("error list", error_list)
         u = self._p * error_list[-1]
         if(len(error_list) > 1):
             u += self._d * (error_list[-1] - error_list[-2])/dt
+        if (len(error_list) >= 3):
+            error_list.pop(0)
         return u
 
 # finite state machine
@@ -72,7 +75,7 @@ class PersonTracker():
 
     def __init__(self, controller, linear_velocity=LINEAR_VELOCITY,
                  angular_velocity=ANGULAR_VELOCITY, scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
-                 threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE):
+                 threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE, target_direction=TARGET_DIRECTION):
         # Setting up publishers/subscribers.
         self._cmd_pub = rospy.Publisher(
             DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -96,15 +99,17 @@ class PersonTracker():
 
         self.threshold_distance = threshold_distance        # minimum distance to obstacle
         self.target_distance = target_distance             # target distance to person
-        self.target_direction = RESOLUTION/2                # target direction to person
+        self.target_direction = target_direction                # target direction to person
 
         # list of errors for target distance
         self.direction_error_list = []
         self.distance_error_list = []
+        self.x_values = [ ]
+        self.z_values = [ ]
 
         # intial state of the robot
         self._fsm = fsm.INITIAL
-
+        self.fall_msg = ''
     # move the robot
     def move(self, linear_vel, angular_vel):
         twist_msg = Twist()
@@ -134,10 +139,23 @@ class PersonTracker():
 
         # TO DO: calculate size of box from Point
         # x, y, z = msg.?
+        #if fall_msg.x == 0 and fall_msg.y == 0:
+        self.fall_msg = fall_msg
 
+        self.z_values.append(fall_msg.z)
+        self.x_values.append(fall_msg.x)
+        if len(self.z_values) > 30:
+            self.z_values.pop(0)
+
+        if len(self.x_values) > 30:
+            self.x_values.pop(0)
+
+
+        print("x, y value", fall_msg.x, fall_msg.y)
         # calculate the distance and append to error
-        direction_error = self.target_direction - fall_msg.y
-        distance_error = self.target_distance - fall_msg.z
+        direction_error = self.target_direction - sum(self.x_values)/len(self.x_values)
+        distance_error = self.target_distance - sum(self.z_values)/len(self.z_values)
+        #print("average", sum(self.z_values)/len(self.z_values))
         self.direction_error_list.append(direction_error)
         self.distance_error_list.append(distance_error)
         ###########################################################################
@@ -150,19 +168,20 @@ class PersonTracker():
             # first move forward to generate some errors
             if self._fsm == fsm.INITIAL:
 
-                start_time = rospy.get_rostime()
-                duration = rospy.Duration(3)
+                # start_time = rospy.get_rostime()
+                # duration = rospy.Duration(1)
 
-                while not rospy.is_shutdown():
+                # while not rospy.is_shutdown():
 
-                    if rospy.get_rostime() - start_time < duration:
-                        self.move(self.linear_velocity, 0)
-                    else:
-                        self.stop()
-                        break
+                #     if rospy.get_rostime() - start_time < duration:
+                #         self.move(self.linear_velocity, 0)
+                #     else:
+                #         self.stop()
+                #         break
 
-                    rate.sleep()
-                self._fsm = fsm.TRACKING
+                #     rate.sleep()
+                if len(self.x_values) > 0:
+                    self._fsm = fsm.TRACKING
 
             # rotate if collision expected by the laser
             elif self._fsm == fsm.COLLISION:
@@ -187,29 +206,24 @@ class PersonTracker():
 
                 new_rotation = self.controller.step(
                     self.direction_error_list, 0.1)
-                new_direction = self.controller.step(
+                new_velocity = self.controller.step(
                     self.distance_error_list, 0.1)
-                print("debug", new_direction, new_rotation)
-                
-                start_time = rospy.get_rostime()
-                duration = rospy.Duration(new_direction/self.linear_velocity)
-
-                while not rospy.is_shutdown():
-
-                    if rospy.get_rostime() - start_time < duration:
-                        self.move(self.linear_velocity, np.sign(new_rotation) * self.angular_velocity)
-                    else:
-                        self.stop()
-                        break
-
-                    rate.sleep()
-
-
+                #print("debug", new_velocity, new_rotation)
+                # print("Velocity ", (1 / (1 + np.exp(-1*new_velocity))))
+                #self.move((1 / (1 + np.exp(-1*new_velocity))), 0)
+                if self.fall_msg.x == 0:
+                    self.stop()   
+                else:
+                    #self.move(max(0, new_velocity/80000), new_rotation/120)
+                    print("Angular Velocity ", new_rotation/200)
+                    #self.move(0, new_rotation/200)
+                    self.move(max(0, new_velocity/80000), new_rotation/200)
+                    
                 # self.move(new_direction, new_rotation)
 
-            # elif self._fsm == fsm.STANDBY:
+            elif self._fsm == fsm.STANDBY:
             #     # send message to planner node
-            #     pass
+                 pass
 
             rate.sleep()
 
@@ -223,7 +237,7 @@ def main():
     rospy.sleep(4)
 
     # Initialize controller
-    controller = PD(1, 10)
+    controller = PD(1, 1)
 
     # Initialization of the class for the robot following the right wall
     tracker = PersonTracker(controller)
