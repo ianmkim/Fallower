@@ -105,7 +105,7 @@ class PersonTracker():
 
         # intial state of the robot
         self._fsm = fsm.INITIAL
-        self.fall_msg = ''
+        self.fall_msg = None
     # move the robot
 
     def move(self, linear_vel, angular_vel):
@@ -195,14 +195,16 @@ class PersonTracker():
                     self.direction_error_list, 0.1)
                 new_velocity = self.controller.step(
                     self.distance_error_list, 0.1)
+                status = self.fall_msg.action_status
 
-                if (not self.fall_msg) or self.fall_msg.x == 0:
+                if ((not self.fall_msg) or self.fall_msg.x == 0 or
+                        status == "Fall Down" or status == "Lying Down"):
                     self.stop()
                 else:
                     print("Linear Velocity: ", max(0, new_velocity/80000))
                     print("Angular Velocity: ", new_rotation/200)
                     self.move(max(0, new_velocity/80000), new_rotation/200)
-
+                    self.fall_msg = None
             rate.sleep()
 
 
