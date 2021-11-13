@@ -225,7 +225,7 @@ def main():
     rospy.sleep(2)
 
     # Initialize controller
-    controller = PD(1.1, 2)
+    controller = PD(1, 2)
 
     # Initialization of the class for the robot following the right wall
     tracker = PersonTracker(controller)
