@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Author: Tim (Kyoung Tae) Kim
 # Date: November 9th, 2021
@@ -23,7 +23,7 @@ from std_msgs.msg import Int32, Float32
 # Constants.
 # Topic names
 DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
-DEFAULT_SCAN_TOPIC = 'base_scan'  # name of topic for Stage simulator
+DEFAULT_SCAN_TOPIC = 'scan'  # name of topic for Stage simulator
 # DEFAULT_SCAN_TOPIC = 'scan' # For Gazebo, 'scan'
 
 # Frequency at which the loop operates
@@ -31,9 +31,10 @@ FREQUENCY = 10  # Hz.
 
 # Velocities that will be used
 LINEAR_VELOCITY = 0.2  # m/s
+ANGULAR_VELOCITY = math.pi/8
 
 # Goal distance to the wall
-THRESHOLD_DISTANCE = 0.25  # m
+THRESHOLD_DISTANCE = 0.05  # m
 TARGET_DISTANCE = 0.5  # m
 
 # Field of view in radians that is checked in front of the robot
@@ -51,6 +52,7 @@ class PD:
 
     # step function that calculates new velocity
     def step(self, error_list, dt):
+        print("error list", error_list)
         u = self._p * error_list[-1]
         if(len(error_list) > 1):
             u += self._d * (error_list[-1] - error_list[-2])/dt
@@ -69,26 +71,27 @@ class fsm(Enum):
 class PersonTracker():
 
     def __init__(self, controller, linear_velocity=LINEAR_VELOCITY,
-                 scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
+                 angular_velocity=ANGULAR_VELOCITY, scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
                  threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE):
         # Setting up publishers/subscribers.
         self._cmd_pub = rospy.Publisher(
             DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self._laser_sub = rospy.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan)
+        self._laser_sub = message_filters.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan)
         # TO DO: add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person )
-        self._fall_sub = rospy.Subscriber("fall_detection", Point)
+        self._fall_sub = message_filters.Subscriber("location_status", Point)
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
 
-        ts = message_filters.ApproximateTimeSynchronizer(
-            [self._laser_sub, self._fall_sub], 10, 0.1, allow_headerless=True)
-        ts.registerCallback(self._callback)
+        self.ts = message_filters.ApproximateTimeSynchronizer(
+            [self._laser_sub, self._fall_sub], 1, 1, allow_headerless=True)
+        self.ts.registerCallback(self._callback)
 
         # set up the controller
         self.controller = controller
 
         self.linear_velocity = linear_velocity    # linear velocity of robot
+        self.angular_velocity = angular_velocity
         self.scan_angle = scan_angle              # angle for field of view
 
         self.threshold_distance = threshold_distance        # minimum distance to obstacle
@@ -115,19 +118,18 @@ class PersonTracker():
         self._cmd_pub.publish(twist_msg)
 
     def _callback(self, laser_msg, fall_msg):
-
         ############################### Laser #####################################
         min_distance = float('-inf')
 
         for i in range(len(laser_msg.ranges)):
             if float('-inf') < laser_msg.ranges[i] and laser_msg.ranges[i] < float('inf'):
-                min_distance = min(min_distance, laser_msg.range[i])
-
+                min_distance = min(min_distance, laser_msg.ranges[i])
+        # print("min distance", min_distance)
         # rotate if minimum distance less than goal
-        if min_distance < THRESHOLD_DISTANCE:
-            self._fsm = fsm.COLLISION
-        else:
-            self._fsm = fsm.TRACKING
+        # if min_distance < THRESHOLD_DISTANCE:
+        #     self._fsm = fsm.COLLISION
+        # else:
+        #     self._fsm = fsm.TRACKING
         ################################ Fall #####################################
 
         # TO DO: calculate size of box from Point
@@ -144,12 +146,12 @@ class PersonTracker():
         rate = rospy.Rate(FREQUENCY)  # loop at 10 Hz.
 
         while not rospy.is_shutdown():
-
+            print("FSM Mode: ", self._fsm)
             # first move forward to generate some errors
             if self._fsm == fsm.INITIAL:
 
                 start_time = rospy.get_rostime()
-                duration = rospy.Duration(1)
+                duration = rospy.Duration(3)
 
                 while not rospy.is_shutdown():
 
@@ -160,6 +162,7 @@ class PersonTracker():
                         break
 
                     rate.sleep()
+                self._fsm = fsm.TRACKING
 
             # rotate if collision expected by the laser
             elif self._fsm == fsm.COLLISION:
@@ -177,6 +180,7 @@ class PersonTracker():
                         break
 
                     rate.sleep()
+                self._fsm = fsm.TRACKING
 
             # otherwise rotate by angle provided by controller
             elif self._fsm == fsm.TRACKING:
@@ -185,8 +189,23 @@ class PersonTracker():
                     self.direction_error_list, 0.1)
                 new_direction = self.controller.step(
                     self.distance_error_list, 0.1)
+                print("debug", new_direction, new_rotation)
+                
+                start_time = rospy.get_rostime()
+                duration = rospy.Duration(new_direction/self.linear_velocity)
 
-                self.move(new_direction, new_rotation)
+                while not rospy.is_shutdown():
+
+                    if rospy.get_rostime() - start_time < duration:
+                        self.move(self.linear_velocity, np.sign(new_rotation) * self.angular_velocity)
+                    else:
+                        self.stop()
+                        break
+
+                    rate.sleep()
+
+
+                # self.move(new_direction, new_rotation)
 
             # elif self._fsm == fsm.STANDBY:
             #     # send message to planner node
@@ -211,6 +230,7 @@ def main():
 
     # If interrupted, send a stop command before interrupting.
     rospy.on_shutdown(tracker.stop)
+
 
     try:
         tracker.spin()
