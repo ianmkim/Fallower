@@ -24,7 +24,7 @@ DEFAULT_SCAN_TOPIC = 'scan'  # name of topic for Stage simulator
 # DEFAULT_SCAN_TOPIC = 'scan' # For Gazebo, 'scan'
 
 # Frequency at which the loop operates
-FREQUENCY = 10  # Hz.
+FREQUENCY = 100 # Hz.
 
 # Velocities that will be used
 LINEAR_VELOCITY = 0.2  # m/s
@@ -124,6 +124,7 @@ class PersonTracker():
         self._cmd_pub.publish(twist_msg)
 
     def _callback(self, laser_msg, fall_msg, action_msg):
+        print(action_msgs)
         ############################### Laser #####################################
         min_distance = float('-inf')
 
