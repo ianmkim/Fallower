@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Author: Tim (Kyoung Tae) Kim
-# Date: November 9th, 2021
+# Date: November 13th, 2021
 
 # Import of python modules.
 import math
@@ -11,14 +11,11 @@ import random
 
 # import of relevant libraries.
 import rospy  # module for ROS APIs
-from geometry_msgs.msg import Twist, Pose, Point, Quaternion
+from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import LaserScan  # message type for scan
-from nav_msgs.msg import Odometry
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import tf
-
 import message_filters
-from std_msgs.msg import Int32, Float32
+from std_msgs.msg import String
 
 # Constants.
 # Topic names
@@ -35,7 +32,8 @@ ANGULAR_VELOCITY = math.pi/8
 
 # Goal distance to the wall
 THRESHOLD_DISTANCE = 0.05  # m
-TARGET_DISTANCE = 0.5  # m
+TARGET_DISTANCE = 35000  # z values
+TARGET_DIRECTION = 200
 
 # Field of view in radians that is checked in front of the robot
 MIN_SCAN_ANGLE_RAD = - 180.0 / 180 * math.pi
@@ -50,12 +48,13 @@ class PD:
         self._p = kp      # proportional gain
         self._d = kd      # derivative gain
 
-    # step function that calculates new velocity
+    # step function that calculates new linear/angular velocity
     def step(self, error_list, dt):
-        print("error list", error_list)
         u = self._p * error_list[-1]
         if(len(error_list) > 1):
             u += self._d * (error_list[-1] - error_list[-2])/dt
+        if (len(error_list) >= 3):
+            error_list.pop(0)
         return u
 
 # finite state machine
@@ -71,20 +70,23 @@ class fsm(Enum):
 class PersonTracker():
 
     def __init__(self, controller, linear_velocity=LINEAR_VELOCITY,
-                 angular_velocity=ANGULAR_VELOCITY, scan_angle=[MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
-                 threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE):
+                 angular_velocity=ANGULAR_VELOCITY, scan_angle=[
+                     MIN_SCAN_ANGLE_RAD, MAX_SCAN_ANGLE_RAD],
+                 threshold_distance=THRESHOLD_DISTANCE, target_distance=TARGET_DISTANCE, target_direction=TARGET_DIRECTION):
         # Setting up publishers/subscribers.
         self._cmd_pub = rospy.Publisher(
             DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self._laser_sub = message_filters.Subscriber(DEFAULT_SCAN_TOPIC, LaserScan)
-        # TO DO: add subscriber to fall detection node (size of frame box)
-        # x, y, z  (x, y) is center of frame box, z is the depth (distance to person )
+        self._laser_sub = message_filters.Subscriber(
+            DEFAULT_SCAN_TOPIC, LaserScan)
+        # add subscriber to fall detection node (size of frame box)
+        # x, y, z  (x, y) is center of frame box, z is the depth (distance to person)
         self._fall_sub = message_filters.Subscriber("location_status", Point)
+        self._action_sub = message_filters.Subscriber("action_status", String)
+
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
-
         self.ts = message_filters.ApproximateTimeSynchronizer(
-            [self._laser_sub, self._fall_sub], 1, 1, allow_headerless=True)
+            [self._laser_sub, self._fall_sub, self._action_sub], 1, 1, allow_headerless=True)
         self.ts.registerCallback(self._callback)
 
         # set up the controller
@@ -94,18 +96,22 @@ class PersonTracker():
         self.angular_velocity = angular_velocity
         self.scan_angle = scan_angle              # angle for field of view
 
-        self.threshold_distance = threshold_distance        # minimum distance to obstacle
+        self.threshold_distance = threshold_distance       # minimum distance to obstacle
         self.target_distance = target_distance             # target distance to person
-        self.target_direction = RESOLUTION/2                # target direction to person
+        self.target_direction = target_direction           # target direction to person
 
         # list of errors for target distance
         self.direction_error_list = []
         self.distance_error_list = []
+        self.x_values = []
+        self.z_values = []
 
         # intial state of the robot
         self._fsm = fsm.INITIAL
-
+        self.fall_msg = None
+        self.action_msg = None
     # move the robot
+
     def move(self, linear_vel, angular_vel):
         twist_msg = Twist()
         twist_msg.linear.x = linear_vel
@@ -117,29 +123,46 @@ class PersonTracker():
         twist_msg = Twist()
         self._cmd_pub.publish(twist_msg)
 
-    def _callback(self, laser_msg, fall_msg):
+    def _callback(self, laser_msg, fall_msg, action_msg):
         ############################### Laser #####################################
         min_distance = float('-inf')
 
         for i in range(len(laser_msg.ranges)):
             if float('-inf') < laser_msg.ranges[i] and laser_msg.ranges[i] < float('inf'):
                 min_distance = min(min_distance, laser_msg.ranges[i])
+
         # print("min distance", min_distance)
         # rotate if minimum distance less than goal
         # if min_distance < THRESHOLD_DISTANCE:
         #     self._fsm = fsm.COLLISION
         # else:
         #     self._fsm = fsm.TRACKING
+
         ################################ Fall #####################################
 
-        # TO DO: calculate size of box from Point
-        # x, y, z = msg.?
+        # store fall msg and x, z values
+        self.fall_msg = fall_msg
+        self.z_values.append(fall_msg.z)
+        self.x_values.append(fall_msg.x)
+        if len(self.z_values) > 30:
+            self.z_values.pop(0)
+
+        if len(self.x_values) > 30:
+            self.x_values.pop(0)
+
+        print("x, y value", fall_msg.x, fall_msg.y)
 
         # calculate the distance and append to error
-        direction_error = self.target_direction - fall_msg.y
-        distance_error = self.target_distance - fall_msg.z
+        direction_error = self.target_direction - \
+            sum(self.x_values)/len(self.x_values)
+        distance_error = self.target_distance - \
+            sum(self.z_values)/len(self.z_values)
         self.direction_error_list.append(direction_error)
         self.distance_error_list.append(distance_error)
+
+        ################################ Status #####################################
+        self.action_msg = action_msg
+
         ###########################################################################
 
     def spin(self):
@@ -147,22 +170,11 @@ class PersonTracker():
 
         while not rospy.is_shutdown():
             print("FSM Mode: ", self._fsm)
-            # first move forward to generate some errors
+
+            # wait until errors have been generated
             if self._fsm == fsm.INITIAL:
-
-                start_time = rospy.get_rostime()
-                duration = rospy.Duration(3)
-
-                while not rospy.is_shutdown():
-
-                    if rospy.get_rostime() - start_time < duration:
-                        self.move(self.linear_velocity, 0)
-                    else:
-                        self.stop()
-                        break
-
-                    rate.sleep()
-                self._fsm = fsm.TRACKING
+                if len(self.x_values) > 0:
+                    self._fsm = fsm.TRACKING
 
             # rotate if collision expected by the laser
             elif self._fsm == fsm.COLLISION:
@@ -185,32 +197,22 @@ class PersonTracker():
             # otherwise rotate by angle provided by controller
             elif self._fsm == fsm.TRACKING:
 
+                # calculation by PD controller
                 new_rotation = self.controller.step(
                     self.direction_error_list, 0.1)
-                new_direction = self.controller.step(
+                new_velocity = self.controller.step(
                     self.distance_error_list, 0.1)
-                print("debug", new_direction, new_rotation)
-                
-                start_time = rospy.get_rostime()
-                duration = rospy.Duration(new_direction/self.linear_velocity)
+                status = self.action_msg
 
-                while not rospy.is_shutdown():
-
-                    if rospy.get_rostime() - start_time < duration:
-                        self.move(self.linear_velocity, np.sign(new_rotation) * self.angular_velocity)
-                    else:
-                        self.stop()
-                        break
-
-                    rate.sleep()
-
-
-                # self.move(new_direction, new_rotation)
-
-            # elif self._fsm == fsm.STANDBY:
-            #     # send message to planner node
-            #     pass
-
+                if ((not self.fall_msg) or self.fall_msg.x == 0 or
+                        status == "Fall Down" or status == "Lying Down"):
+                    self.stop()
+                else:
+                    print("Linear Velocity: ", max(0, new_velocity/80000))
+                    print("Angular Velocity: ", new_rotation/200)
+                    self.move(max(0, min(0.5, new_velocity/80000)),
+                              new_rotation/200)
+                    self.fall_msg = None
             rate.sleep()
 
 
@@ -220,17 +222,16 @@ def main():
     rospy.init_node("person_tracker")
 
     # Sleep for a few seconds to wait for the registration.
-    rospy.sleep(4)
+    rospy.sleep(2)
 
     # Initialize controller
-    controller = PD(1, 10)
+    controller = PD(1, 2)
 
     # Initialization of the class for the robot following the right wall
     tracker = PersonTracker(controller)
 
     # If interrupted, send a stop command before interrupting.
     rospy.on_shutdown(tracker.stop)
-
 
     try:
         tracker.spin()
@@ -240,37 +241,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-    # def _laser_callback(self, msg):
-
-    #     # index of range for min and max field of view
-    #     min_index = int((self.scan_angle[0] - msg.angle_min) / msg.angle_increment)
-    #     max_index = int((self.scan_angle[1] - msg.angle_min) / msg.angle_increment)
-
-    #     # find minimum distance in field of view
-    #     min_distance = np.min(msg.ranges[min_index:max_index+1])
-    #     min_distance = float('-inf')
-
-    #     for i in range(len(msg.ranges)):
-    #         if float('-inf') < msg.ranges[i] and msg.ranges[i] < float('inf'):
-    #             min_distance = min(min_distance, msg.range[i])
-
-    #     # rotate if minimum distance less than goal
-    #     if min_distance < THRESHOLD_DISTANCE:
-    #         self._fsm = fsm.COLLISION
-    #     else:
-    #         self._fsm = fsm.TRACKING
-
-    # def _fall_callback(self, msg):
-
-    #     # TO DO: calculate size of box from Point
-    #     # x, y, z = msg.?
-
-    #     # calculate the distance and append to error
-    #     direction_error = self.target_direction - msg.y
-    #     distance_error = self.target_distance - msg.z
-    #     self.error_list.append(distance_error)
-
-    #     # rotate if minimum distance less than goal
-    #     if min_distance < GOAL_DISTANCE:
-    #         self._fsm = fsm.ROTATE
