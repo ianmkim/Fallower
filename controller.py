@@ -21,7 +21,6 @@ from std_msgs.msg import String
 # Topic names
 DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
 DEFAULT_SCAN_TOPIC = 'scan'  # name of topic for Stage simulator
-# DEFAULT_SCAN_TOPIC = 'scan' # For Gazebo, 'scan'
 
 # Frequency at which the loop operates
 FREQUENCY = 10  # Hz.
@@ -80,13 +79,14 @@ class PersonTracker():
             DEFAULT_SCAN_TOPIC, LaserScan)
         # add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person)
-        self._fall_sub = message_filters.Subscriber("location_status", Point)
+        self._location_sub = message_filters.Subscriber(
+            "location_status", Point)
         self._action_sub = message_filters.Subscriber("action_status", String)
 
         # TO DO: add publisher to planner node (to track and recover target)
         ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
         self.ts = message_filters.ApproximateTimeSynchronizer(
-            [self._laser_sub, self._fall_sub, self._action_sub], 1, 1, allow_headerless=True)
+            [self._laser_sub, self._location_sub, self._action_sub], 1, 1, allow_headerless=True)
         self.ts.registerCallback(self._callback)
 
         # set up the controller
@@ -108,7 +108,7 @@ class PersonTracker():
 
         # intial state of the robot
         self._fsm = fsm.INITIAL
-        self.fall_msg = None
+        self.location_msg = None
         self.action_msg = None
     # move the robot
 
@@ -123,7 +123,7 @@ class PersonTracker():
         twist_msg = Twist()
         self._cmd_pub.publish(twist_msg)
 
-    def _callback(self, laser_msg, fall_msg, action_msg):
+    def _callback(self, laser_msg, location_msg, action_msg):
         ############################### Laser #####################################
         min_distance = float('-inf')
 
@@ -141,16 +141,16 @@ class PersonTracker():
         ################################ Fall #####################################
 
         # store fall msg and x, z values
-        self.fall_msg = fall_msg
-        self.z_values.append(fall_msg.z)
-        self.x_values.append(fall_msg.x)
+        self.location_msg = location_msg
+        self.z_values.append(location_msg.z)
+        self.x_values.append(location_msg.x)
         if len(self.z_values) > 30:
             self.z_values.pop(0)
 
         if len(self.x_values) > 30:
             self.x_values.pop(0)
 
-        print("x, y value", fall_msg.x, fall_msg.y)
+        #print("x, y value", location_msg.x, location_msg.y)
 
         # calculate the distance and append to error
         direction_error = self.target_direction - \
@@ -204,15 +204,16 @@ class PersonTracker():
                     self.distance_error_list, 0.1)
                 status = self.action_msg
 
-                if ((not self.fall_msg) or self.fall_msg.x == 0 or
+                print("Location msg: ", self.location_msg)
+                if ((not self.location_msg) or self.location_msg.x == 0 or
                         status == "Fall Down" or status == "Lying Down"):
                     self.stop()
                 else:
-                    print("Linear Velocity: ", max(0, new_velocity/80000))
-                    print("Angular Velocity: ", new_rotation/200)
+                    #print("Linear Velocity: ", max(0, new_velocity/80000))
+                    #print("Angular Velocity: ", new_rotation/200)
                     self.move(max(0, min(0.5, new_velocity/80000)),
                               new_rotation/200)
-                    self.fall_msg = None
+                    self.location_msg = None
             rate.sleep()
 
 
