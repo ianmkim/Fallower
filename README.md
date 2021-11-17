@@ -76,6 +76,12 @@ rosluanch rosbot_ekf all.launch # normal motor control and whatnot
 ## Run Fallower
 First, make sure that you have a static IP address assigned to your laptop and NOT using DHCP. Make note of this static IP and change the ROS_IP variable in setup_laptop_for_ethernet.
 
+Then:
+```
+source setup_laptop_for_ethernet # on the laptop
+source setup_robot_for_ethernet # on the robot
+```
+
 First, follow the installation procedure in the FallDetection repository ([github.com/parvusvox/falldetection](https://github.com/parvusvox/falldetection)).
 
 Then, modify the CAM_ID portion of falldetection/constants.py to the appropriate string. (or None if you want to use the robot's built in camera).
@@ -88,15 +94,18 @@ python3 controller.py
 python3 fall-detection-alert-system/action_listener.py
 python3 fall-detection-alert-system/map.py
 ```
+
 ## Run Web Interface
-Access the web interface directory
+First navigate to the directory containing the website:
 ```bash
 cd fallower-web-interface
 ```
+
 Download the node modules by running the following command:
 ```bash
 yarn install
 ```
+
 Start the development server.
 ```bash
 yarn start
