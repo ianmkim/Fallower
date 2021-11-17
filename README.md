@@ -1,6 +1,6 @@
 # Fallower
 
-## How to run
+## Install Fallower
 Clone the repository and pull all the submodules:
 ```
 git clone https://github.com/parvusvox/Fallower.git
@@ -8,15 +8,15 @@ cd Fallower
 git submodule update --init --recursive
 ```
 
-In order to update all the submodules to origin, use this
+In order to update all the submodules to master, use this
 ```
 git submodule foreach git pull origin master
 ```
 
 ## Ros Dependencies Needed
 ```
-ros-noetic-cv-bridge
-ros-noetic-vision-opencv
+sudo apt-get install -y ros-noetic-cv-bridge \
+ros-noetic-vision-opencv \
 ros-noetic-hector-slam
 ```
 
@@ -68,4 +68,18 @@ roscore # run the ros master
 roslaunch kill_depth rosbot_hardware_no_depth.launch # run the modified camera & lidar module without the depth processing
 rosluanch rosbot_ekf all.launch # normal motor control and whatnot
 
+```
+
+## Run Fallower
+First, make sure that you have a static IP address assigned to your laptop and NOT using DHCP. Make note of this static IP and change the ROS_IP variable in setup_laptop_for_ethernet.
+
+First, follow the installation procedure in the FallDetection repository (github.com/parvusvox/falldetection).
+
+Then, on the laptop (or any other computing device)
+```
+cd Fallower
+python3 FallDetection/detection_node.py
+python3 controller.py
+python3 fall-detection-alert-system/action_listener.py
+python3 fall-detection-alert-system/map.py
 ```
