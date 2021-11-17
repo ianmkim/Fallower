@@ -1,6 +1,8 @@
 # Fallower
 Fallower is an automated robot system for detecting and reporting a fall for the elderly.
 
+![Fallower gif](final.gif)
+
 ## Install Fallower
 Clone the repository and pull all the submodules:
 ```
