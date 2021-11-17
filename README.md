@@ -73,7 +73,7 @@ rosluanch rosbot_ekf all.launch # normal motor control and whatnot
 ## Run Fallower
 First, make sure that you have a static IP address assigned to your laptop and NOT using DHCP. Make note of this static IP and change the ROS_IP variable in setup_laptop_for_ethernet.
 
-First, follow the installation procedure in the FallDetection repository (github.com/parvusvox/falldetection).
+First, follow the installation procedure in the FallDetection repository ([](github.com/parvusvox/falldetection)).
 
 Then, on the laptop (or any other computing device)
 ```
