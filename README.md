@@ -89,12 +89,14 @@ python3 fall-detection-alert-system/action_listener.py
 python3 fall-detection-alert-system/map.py
 ```
 ## Run Web Interface
-
+Access the web interface directory
+```bash
+cd fallower-web-interface
+```
 Download the node modules by running the following command:
 ```bash
 yarn install
 ```
-
 Start the development server.
 ```bash
 yarn start
