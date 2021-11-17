@@ -2,6 +2,7 @@
 Fallower is an automated robot system for detecting and reporting a fall for the elderly.
 
 ![Fallower gif](final.gif)
+
 Full video here: [https://www.youtube.com/watch?v=hMWx2GMU1FU](https://www.youtube.com/watch?v=hMWx2GMU1FU)
 
 ## Install Fallower
