@@ -75,6 +75,8 @@ First, make sure that you have a static IP address assigned to your laptop and N
 
 First, follow the installation procedure in the FallDetection repository ([github.com/parvusvox/falldetection](https://github.com/parvusvox/falldetection)).
 
+Then, modify the CAM_ID portion of falldetection/constants.py to the appropriate string. (or None if you want to use the robot's built in camera).
+
 Then, on the laptop (or any other computing device)
 ```
 cd Fallower
