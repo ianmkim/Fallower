@@ -12,7 +12,6 @@ import random
 # import of relevant libraries.
 import rospy  # module for ROS APIs
 from geometry_msgs.msg import Twist, Point
-from sensor_msgs.msg import LaserScan  # message type for scan
 import tf
 import message_filters
 from std_msgs.msg import String
@@ -20,7 +19,6 @@ from std_msgs.msg import String
 # Constants.
 # Topic names
 DEFAULT_CMD_VEL_TOPIC = 'cmd_vel'
-DEFAULT_SCAN_TOPIC = 'scan'  # name of topic for Stage simulator
 
 # Frequency at which the loop operates
 FREQUENCY = 10  # Hz.
@@ -75,8 +73,7 @@ class PersonTracker():
         # Setting up publishers/subscribers.
         self._cmd_pub = rospy.Publisher(
             DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self._laser_sub = message_filters.Subscriber(
-            DEFAULT_SCAN_TOPIC, LaserScan)
+
         # add subscriber to fall detection node (size of frame box)
         # x, y, z  (x, y) is center of frame box, z is the depth (distance to person)
         self._location_sub = message_filters.Subscriber(
@@ -84,9 +81,8 @@ class PersonTracker():
         self._action_sub = message_filters.Subscriber("action_status", String)
 
         # TO DO: add publisher to planner node (to track and recover target)
-        ##  self._planner_pub = rospy.Publisher("planner", str, queue_size=1)
         self.ts = message_filters.ApproximateTimeSynchronizer(
-            [self._laser_sub, self._location_sub, self._action_sub], 1, 1, allow_headerless=True)
+            [self._location_sub, self._action_sub], 1, 1, allow_headerless=True)
         self.ts.registerCallback(self._callback)
 
         # set up the controller
@@ -110,8 +106,8 @@ class PersonTracker():
         self._fsm = fsm.INITIAL
         self.location_msg = None
         self.action_msg = None
-    # move the robot
 
+   # move the robot
     def move(self, linear_vel, angular_vel):
         twist_msg = Twist()
         twist_msg.linear.x = linear_vel
@@ -123,23 +119,9 @@ class PersonTracker():
         twist_msg = Twist()
         self._cmd_pub.publish(twist_msg)
 
-    def _callback(self, laser_msg, location_msg, action_msg):
-        ############################### Laser #####################################
-        min_distance = float('-inf')
-
-        for i in range(len(laser_msg.ranges)):
-            if float('-inf') < laser_msg.ranges[i] and laser_msg.ranges[i] < float('inf'):
-                min_distance = min(min_distance, laser_msg.ranges[i])
-
-        # print("min distance", min_distance)
-        # rotate if minimum distance less than goal
-        # if min_distance < THRESHOLD_DISTANCE:
-        #     self._fsm = fsm.COLLISION
-        # else:
-        #     self._fsm = fsm.TRACKING
+    def _callback(self, location_msg, action_msg):
 
         ################################ Fall #####################################
-
         # store fall msg and x, z values
         self.location_msg = location_msg
         self.z_values.append(location_msg.z)
@@ -150,8 +132,6 @@ class PersonTracker():
         if len(self.x_values) > 30:
             self.x_values.pop(0)
 
-        #print("x, y value", location_msg.x, location_msg.y)
-
         # calculate the distance and append to error
         direction_error = self.target_direction - \
             sum(self.x_values)/len(self.x_values)
@@ -159,17 +139,14 @@ class PersonTracker():
             sum(self.z_values)/len(self.z_values)
         self.direction_error_list.append(direction_error)
         self.distance_error_list.append(distance_error)
-
         ################################ Status #####################################
         self.action_msg = action_msg
-
         ###########################################################################
 
     def spin(self):
         rate = rospy.Rate(FREQUENCY)  # loop at 10 Hz.
 
         while not rospy.is_shutdown():
-            print("FSM Mode: ", self._fsm)
 
             # wait until errors have been generated
             if self._fsm == fsm.INITIAL:
@@ -204,13 +181,13 @@ class PersonTracker():
                     self.distance_error_list, 0.1)
                 status = self.action_msg
 
-                print("Location msg: ", self.location_msg)
+                # stop if the person has fallen or lying down
                 if ((not self.location_msg) or self.location_msg.x == 0 or
                         status == "Fall Down" or status == "Lying Down"):
                     self.stop()
+                
+                # move with new velocity calculated by controller
                 else:
-                    #print("Linear Velocity: ", max(0, new_velocity/80000))
-                    #print("Angular Velocity: ", new_rotation/200)
                     self.move(max(0, min(0.5, new_velocity/80000)),
                               new_rotation/200)
                     self.location_msg = None
