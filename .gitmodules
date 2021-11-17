@@ -10,3 +10,6 @@
 [submodule "fall-detection-alert-system"]
 	path = fall-detection-alert-system
 	url = https://github.com/Pape98/fall-detection-alert-system.git
+[submodule "fallower-web-interface"]
+	path = fallower-web-interface
+	url = https://github.com/Pape98/fallower-web-interface.git
